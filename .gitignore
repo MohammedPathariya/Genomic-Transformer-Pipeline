@@ -1,0 +1,69 @@
+# --- Research Data & Bioinformatics ---
+data/
+*.fastq
+*.fastq.gz
+*.fq
+*.fq.gz
+*.bam
+*.sam
+*.bai
+*.fast5
+*.pod5
+*.fasta
+*.fa
+*.json
+# Keep the JSON results from reference_repos if you want, but usually, 
+# clinical data should not be tracked.
+results/
+
+# --- Python & Environments ---
+__pycache__/
+*.py[cod]
+*.class
+*.so
+.Python
+env/
+venv/
+.env
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# --- Jupyter Notebooks ---
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+*-checkpoint.ipynb
+
+# --- OS Specific ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# --- Logs ---
+*.log
+dataset_generation.log
+
+# --- Reference Documents ---
+docs/*.pdf
+
+# --- Reference Repos (Ujwal Jibhkate - https://github.com/ujwal-jibhkate?tab=repositories) ---
+reference_repos/
