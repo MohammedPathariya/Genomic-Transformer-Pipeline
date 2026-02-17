@@ -5,6 +5,8 @@ This document tracks the core research papers and technical documentation used t
 ### BioReason: Incentivizing Multimodal Biological Reasoning within a DNA-LLM Model
 Citation: Fallahpour, A., et al. (2025). arXiv:2505.23579 [cs.LG].
 
+URL: https://arxiv.org/abs/2505.23579
+
 Role: Provides the architectural foundation for the specific DNA-based Large Language Models used in this lab's context.
 
 Summary: Introduces a framework that integrates a DNA foundation model with an LLM to enable multi-step, interpretable biological reasoning.
@@ -15,6 +17,8 @@ Relevance: Direct link to the bioreason-edge repository currently under study.
 
 ### Update and Latest Advances in Antiretroviral Therapy
 Citation: Menéndez-Arias, L., et al. (2022). Trends in Pharmacological Sciences, 43(1), 16-29.
+
+URL: https://www.cell.com/trends/pharmacological-sciences/fulltext/S0165-6147(21)00193-0
 
 Role: Clinical background on drug resistance.
 
