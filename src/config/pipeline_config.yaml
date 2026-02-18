@@ -1,0 +1,211 @@
+# =============================================================================
+# Genomic-Transformer-Pipeline — Pipeline Configuration
+# =============================================================================
+#
+# RULE: No magic numbers anywhere in source code.
+#       Every threshold, path, and parameter lives here.
+#       To change a value, edit this file only — never touch source code.
+#
+# All paths are relative to the project root unless otherwise noted.
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# PART 1 — Ingestion Pipeline
+# -----------------------------------------------------------------------------
+
+ingestion:
+
+  # Directories scanned for input files during batch processing
+  input_dirs:
+    fastq: "data/test/fastq"      # FASTQ files from ENA/SRA
+    #fasta: "data/test/fasta"      # FASTA files from LANL/GenBank
+    #bam:   "data/test/bam"        # BAM files for validation only
+
+  # Where processed reads are written to disk (JSONL format)
+  output_dir: "data/processed"
+
+  # Where batch run logs are written
+  log_dir: "logs"
+
+  # Execution mode
+  # "sequential" : one file at a time — use on MacBook Air M1
+  # "parallel"   : multiple files at once — use on HPC with multiple nodes
+  # Change this single line when moving to HPC. Nothing else needs to change.
+  execution_mode: "sequential"
+
+  # Number of parallel workers when execution_mode is "parallel"
+  # Ignored when execution_mode is "sequential"
+  # On HPC: set to number of available CPU cores minus 2 (leave headroom)
+  max_workers: 4
+
+  # Supported file extensions — files not matching these are skipped
+  supported_extensions:
+    - ".fastq"
+    - ".fastq.gz"
+    - ".fq"
+    - ".fq.gz"
+    - ".fasta"
+    - ".fa"
+    - ".fna"
+    - ".fasta.gz"
+    - ".bam"
+
+
+# -----------------------------------------------------------------------------
+# Quality Filter
+# src/ingestion/quality_filter.py
+# -----------------------------------------------------------------------------
+
+quality_filter:
+
+  # Set to false to disable all filtering — useful for debugging downstream
+  # modules when you want to pass everything through regardless of quality
+  enabled: true
+
+  # Minimum read length in bases
+  # Reads shorter than this cannot contain enough pol gene to be useful
+  # HIV-1 pol gene is ~3000bp — 500bp is a conservative floor
+  # Raise to 1000bp when processing full HPC dataset
+  min_read_length: 500
+
+  # Maximum read length in bases
+  # Reads longer than this are likely chimeric artifacts
+  # (two fragments joined during library preparation)
+  max_read_length: 50000
+
+  # Minimum mean Phred quality score across all bases in the read
+  # Q20 = 1% error rate per base — standard clinical Nanopore threshold
+  # Only applied when quality_is_inferred is False (i.e. NOT for FASTA reads)
+  # Raise to Q25 when working with higher-quality datasets
+  min_mean_quality: 20
+
+  # Maximum fraction of ambiguous N bases allowed in a read
+  # 0.1 = 10% — reads with more missing bases than this are discarded
+  # Range: 0.0 (reject any N) to 1.0 (accept all)
+  max_n_fraction: 0.1
+
+  # Failure reasons tracked in FilterStats
+  # These are the exact strings used as keys in the stats output
+  # Do not change these — they are referenced by name in quality_filter.py
+  failure_reasons:
+    - "too_short"
+    - "too_long"
+    - "low_quality"
+    - "high_n_fraction"
+
+
+# -----------------------------------------------------------------------------
+# Enricher — Alignment-Free pol Localization
+# src/enricher/pol_localizer.py
+# (parameters to be filled in when we build the enricher)
+# -----------------------------------------------------------------------------
+
+enricher:
+
+  # K-mer size for pol gene seed matching
+  # 15-mers balance specificity vs noise tolerance
+  # Smaller k = more matches but more false positives
+  # Larger k = fewer false positives but misses noisy reads
+  kmer_size: 15
+
+  # Minimum number of k-mer seed hits required to call a gene region
+  # A read needs at least this many matching k-mers to be assigned to PR/RT/IN
+  min_seed_hits: 3
+
+  # Minimum fraction of k-mers that must match for localization confidence
+  min_kmer_fraction: 0.05
+
+  # Gene regions and their HXB2 nucleotide coordinate ranges
+  # Used to extract seed k-mers from the reference
+  gene_regions:
+    PR:
+      start: 2253
+      end:   2550
+      description: "Protease — 99 amino acids"
+    RT:
+      start: 2550
+      end:   4229
+      description: "Reverse Transcriptase — 560 amino acids"
+    IN:
+      start: 4229
+      end:   5096
+      description: "Integrase — 288 amino acids"
+
+
+# -----------------------------------------------------------------------------
+# Inference Engine
+# src/inference/dna_encoder.py
+# (parameters to be filled in when we build the inference layer)
+# -----------------------------------------------------------------------------
+
+inference:
+
+  # DNA foundation model to use as the frozen encoder
+  # Options: "nucleotide_transformer", "evo2"
+  # Nucleotide Transformer is lighter — better for development
+  # Evo2 is more powerful — better for final training on HPC
+  dna_encoder: "nucleotide_transformer"
+
+  # Model variant (specific to the chosen encoder)
+  # For nucleotide_transformer: "InstaDeepAI/nucleotide-transformer-500m-human-ref"
+  # For evo2: "evo2_7b" or "evo2_40b"
+  model_variant: "InstaDeepAI/nucleotide-transformer-500m-human-ref"
+
+  # Maximum sequence length the encoder accepts (in tokens)
+  # Sequences longer than this are truncated
+  max_sequence_length: 2048
+
+  # Batch size for inference
+  # Reduce if running out of GPU/unified memory
+  batch_size: 8
+
+
+# -----------------------------------------------------------------------------
+# Classification Head
+# src/classification/drm_head.py
+# -----------------------------------------------------------------------------
+
+classification:
+
+  # Drug classes and their clinical resistance frequency thresholds
+  # Based on Stanford HIVdb clinical evidence
+  # Format: drug_class: minimum_frequency_to_call_resistant (0.0-1.0)
+  drug_classes:
+    NRTI:   0.20    # Nucleoside RT Inhibitors — 20% minority variant threshold
+    NNRTI:  0.20    # Non-Nucleoside RT Inhibitors — 20% threshold
+    PI:     0.20    # Protease Inhibitors — 20% threshold
+    INSTI:  0.20    # Integrase Strand Transfer Inhibitors — 20% threshold
+
+  # Resistance level labels
+  # These map to Stanford HIVdb resistance score ranges
+  resistance_levels:
+    susceptible:      "S"
+    potential_low:    "PL"
+    low:              "L"
+    intermediate:     "I"
+    high:             "H"
+
+
+# -----------------------------------------------------------------------------
+# Output
+# src/output/report_generator.py
+# -----------------------------------------------------------------------------
+
+output:
+
+  # Output formats to generate
+  # "json"  : machine-readable structured results
+  # "pdf"   : human-readable clinical report
+  formats:
+    - "json"
+    - "pdf"
+
+  # Output directory for final clinical reports
+  reports_dir: "results"
+
+  # Reference genome information included in reports
+  reference:
+    name: "HXB2"
+    accession: "K03455"
+    path: "data/public/HXB2_reference.fasta"
