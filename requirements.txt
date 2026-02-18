@@ -1,0 +1,64 @@
+# =============================================================================
+# Genomic-Transformer-Pipeline — Requirements
+# =============================================================================
+# Install with: pip install -r requirements.txt
+#
+# This file is organized by project phase.
+# Will add Part 2 and Part 3 dependencies as I build them.
+# Last updated: Part 1 — Ingestion Pipeline
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# PART 1 — Ingestion Pipeline
+# src/ingestion/stream_reader.py
+# src/ingestion/quality_filter.py
+# -----------------------------------------------------------------------------
+
+# BioPython: FASTQ and FASTA file parsing
+# Used in stream_reader.py by SeqIO.parse()
+# Handles gzip, edge-case headers, and Phred decoding automatically
+biopython>=1.81
+
+# pysam: BAM file reading
+# Python wrapper around htslib — the standard C library for BAM/SAM
+# Used in stream_reader.py by pysam.AlignmentFile()
+pysam>=0.21.0
+
+# NumPy: numerical operations on arrays
+# Used throughout for quality score arrays, k-mer vectors, feature matrices
+# Comes pre-installed in many environments but pinned here for reproducibility
+numpy>=1.24.0
+
+# Pandas: tabular data handling
+# Used for the dataset registry in Part 2 and results aggregation
+# in output/aggregator.py — included now as it will be needed very soon
+pandas>=2.0.0
+
+# PyYAML: reading the pipeline_config.yaml file
+# Every module that needs a threshold or path parameter loads it from config
+# Without this, pipeline_config.yaml cannot be parsed
+pyyaml>=6.0
+
+# tqdm: progress bars for long-running operations
+# Used when streaming large FASTQ files or processing the full dataset
+# Small quality-of-life dependency that pays off immediately
+tqdm>=4.65.0
+
+
+# -----------------------------------------------------------------------------
+# PART 2 — Dataset Construction (not yet added)
+# -----------------------------------------------------------------------------
+# Dependencies will be appended here when we build:
+#   src/training/dataset.py
+#   Data download and registry scripts
+
+
+# -----------------------------------------------------------------------------
+# PART 3 — Inference Engine and Model (not yet added)
+# -----------------------------------------------------------------------------
+# Dependencies will be appended here when we build:
+#   src/inference/dna_encoder.py     (torch, transformers, evo2 or NT)
+#   src/inference/reasoning_head.py  (torch)
+#   src/classification/drm_head.py   (torch)
+#   src/output/report_generator.py   (reportlab or weasyprint for PDF)
