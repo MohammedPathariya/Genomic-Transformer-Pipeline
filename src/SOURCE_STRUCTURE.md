@@ -9,12 +9,14 @@ This document explains every file in the `src/` directory — what it does, why 
 Every file in this codebase corresponds to one step in a linear data flow:
 
 ```
-stream_reader → quality_filter → pol_localizer → codon_framer →
+[POD5] → basecaller → stream_reader → quality_filter → pol_localizer → codon_framer →
 feature_builder → dna_encoder → projection → reasoning_head →
 drm_head → confidence → aggregator → report_generator
 ```
 
-The data contract between every step is the standardized `RawRead` dataclass defined in `stream_reader.py`. Nothing downstream ever asks what format a read came from — it only ever sees a `RawRead`.
+The data contract between every step from `stream_reader` onward is the standardized `RawRead` dataclass defined in `stream_reader.py`. Nothing downstream ever asks what format a read came from — it only ever sees a `RawRead`.
+
+The `basecaller.py` step is optional — it only runs when the input is a raw POD5 file from a MinION sequencer. If you already have FASTQ files (from ENA, SRA, or a previous basecalling run), the pipeline starts at `stream_reader.py` directly.
 
 ---
 
@@ -22,7 +24,7 @@ The data contract between every step is the standardized `RawRead` dataclass def
 
 ```
 src/
-├── ingestion/       # Part 1 — The front door. Format parsing and quality control.
+├── ingestion/       # Part 1 — The front door. Signal conversion, format parsing, quality control.
 ├── enricher/        # Part 1 — Alignment-free bioinformatics. No neural networks.
 ├── inference/       # Part 3 — The AI core. DNA encoder + reasoning head.
 ├── classification/  # Part 3 — Resistance calling and uncertainty quantification.
@@ -35,7 +37,33 @@ src/
 
 ## `src/ingestion/` — The Front Door
 
-This is Part 1 of the pipeline. Nothing enters the system without passing through here. This layer knows about file formats. Everything downstream is format-blind.
+This is Part 1 of the pipeline. Nothing enters the system without passing through here. This layer knows about file formats and signal conversion. Everything downstream is format-blind.
+
+### `basecaller.py`
+
+**What it does:** A thin wrapper around Oxford Nanopore's Dorado basecaller. Accepts a POD5 file path, invokes Dorado as a subprocess, and returns the path to the resulting FASTQ file. This is the only file in the pipeline that knows anything about POD5 format or Dorado.
+
+**When it runs:** Only when the input is a raw POD5 file directly from a MinION/PromethION sequencer. If you already have FASTQ files, this module is skipped entirely. The rest of the pipeline is completely unaffected by whether this step ran.
+
+**Why a subprocess and not a Python library:** Dorado is a standalone C++/CUDA binary. Oxford Nanopore does not provide a Python API for it. Every production Nanopore pipeline (including Nextflow-based ones) calls it via subprocess. This is the standard approach.
+
+**Why this is separate from stream_reader.py:** Single responsibility. Basecalling converts electrical signal to nucleotide sequences — that is a signal processing concern. Reading sequences from files is a format parsing concern. Keeping them separate means the pipeline can run without Dorado installed if FASTQ files are already available.
+
+**Key outputs:**
+- A `BasecallResult` dataclass with the path to the output FASTQ file
+- Timing, read count, Dorado version, and error information for logging
+
+**Configuration (in pipeline_config.yaml):**
+```yaml
+basecalling:
+  dorado_executable: "dorado"
+  dorado_model:      "dna_r10.4.1_e8.2_400bps_hac@v4.3.0"
+  device:            "cpu"        # "metal" on M1/M2 Mac, "cuda:0" on HPC
+  batch_size:        64
+  output_dir:        "data/basecalled"
+```
+
+**Dorado installation:** Download from https://github.com/nanoporetech/dorado/releases
 
 ### `stream_reader.py`
 
@@ -47,6 +75,12 @@ This is Part 1 of the pipeline. Nothing enters the system without passing throug
 - FASTA reads get an inferred quality of Q40 (high confidence, since LANL sequences are curated)
 - `quality_is_inferred = True` flags any read whose quality was assigned rather than measured
 - `raw_header` preserves the full original header for traceability
+
+**Input sources:**
+- FASTQ from Dorado (via `basecaller.py`) for real clinical samples
+- FASTQ from ENA/SRA for publicly available Nanopore datasets
+- FASTA from LANL/Stanford HIVdb for clean reference sequences
+- BAM for legacy pipeline validation
 
 **Output:** A generator that yields `RawRead` objects one at a time (streaming, not loading all into memory).
 
@@ -65,9 +99,25 @@ class RawRead:
 
 ### `quality_filter.py`
 
-**What it does:** Receives a stream of `RawRead` objects and drops reads that are too low quality to be useful. Applies three checks: minimum read length, minimum average Phred score, and maximum fraction of ambiguous N bases. Reads that pass are forwarded to the enricher. Reads that fail are logged and discarded.
+**What it does:** Receives a stream of `RawRead` objects and drops reads that are too low quality to be useful. Applies four checks: minimum read length, maximum read length, minimum average Phred score, and maximum fraction of ambiguous N bases. Reads that pass are forwarded to the enricher. Reads that fail are logged and discarded with their failure reason.
 
 **Key design decision:** Reads where `quality_is_inferred = True` (FASTA sources) skip the Phred score check — you cannot filter on quality that was invented. Only the length and N-fraction checks apply to FASTA reads.
+
+**Output:** A generator of passing `RawRead` objects plus a `FilterStats` object tracking total/passed/failed counts and failure breakdowns.
+
+### `batch_processor.py`
+
+**What it does:** Orchestrates running the full single-file pipeline (`stream_reads → quality_filter → write to disk`) across many files simultaneously. Handles fault isolation (one bad file never kills the batch), progress tracking, structured JSON run logging, and checkpoint-based resumability.
+
+**Execution modes:**
+- `"sequential"` — one file at a time, safe on MacBook Air M1
+- `"parallel"` — `ProcessPoolExecutor` with configurable workers, designed for HPC
+
+**Key outputs:**
+- Per-file JSONL files in `data/processed/`
+- A structured JSON run log in `logs/` with full timing, read counts, filter stats, and checkpoint state
+
+**Race condition protection:** A threading `Lock` guards all writes to the shared `RunLog` object. In sequential mode the lock is never contended. In parallel mode it ensures two workers cannot corrupt the log simultaneously.
 
 ---
 
@@ -185,13 +235,14 @@ These files are only used during model training. They are not part of the infere
 
 **What it does:** Holds every configurable parameter in the entire pipeline. No magic numbers exist anywhere in the source code — every threshold, path, model name, and hyperparameter is defined here.
 
-**Examples of what lives here:**
-- Minimum read length and quality thresholds for `quality_filter.py`
-- K-mer sizes for `pol_localizer.py`
-- Drug-class resistance frequency thresholds for `aggregator.py`
-- Pretrained model name and path for `dna_encoder.py`
-- Batch size, learning rate, and epoch count for `trainer.py`
-- Output directory paths for `report_generator.py`
+**Sections:**
+- `basecalling` — Dorado executable path, model, device, batch size
+- `ingestion` — input directories, output directory, execution mode, worker count
+- `quality_filter` — length thresholds, Phred minimum, N-fraction maximum
+- `enricher` — k-mer size, seed hit thresholds, HXB2 gene region coordinates
+- `inference` — DNA encoder model name, max sequence length, batch size
+- `classification` — drug-class resistance frequency thresholds
+- `output` — report formats, output directories, reference genome info
 
 **Rule:** If you find yourself writing a number directly in source code, it belongs in this file instead.
 
@@ -201,7 +252,9 @@ These files are only used during model training. They are not part of the infere
 
 **The most important boundary** is between `src/enricher/` and `src/inference/`. These two layers communicate only through the feature payload produced by `feature_builder.py`. Neither knows anything about the other's internals.
 
-This means:
+**The second important boundary** is between `src/ingestion/basecaller.py` and `src/ingestion/stream_reader.py`. Basecalling is a signal processing concern. Format reading is a parsing concern. They are decoupled so that the pipeline works with or without Dorado installed.
+
+These boundaries give us three concrete engineering benefits:
 - The enricher can be tested and validated with zero ML dependencies
 - The DNA encoder can be swapped (Evo2 → NT → custom) without touching the enricher
 - On edge hardware, the enricher runs on CPU while the GPU handles inference in parallel
