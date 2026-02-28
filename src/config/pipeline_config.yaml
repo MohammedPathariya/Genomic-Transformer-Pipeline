@@ -18,9 +18,9 @@ ingestion:
 
   # Directories scanned for input files during batch processing
   input_dirs:
-    fastq: "data/test/fastq"      # FASTQ files from ENA/SRA
-    #fasta: "data/test/fasta"      # FASTA files from LANL/GenBank
-    #bam:   "data/test/bam"        # BAM files for validation only
+    fastq: "data/test/fastq"      # FASTQ files from ENA/SRA or Dorado output
+    fasta: "data/test/fasta"      # FASTA files from LANL/GenBank/Stanford HIVdb
+    bam:   "data/test/bam"        # BAM files for validation only
 
   # Where processed reads are written to disk (JSONL format)
   output_dir: "data/processed"
@@ -50,6 +50,62 @@ ingestion:
     - ".fna"
     - ".fasta.gz"
     - ".bam"
+
+
+# -----------------------------------------------------------------------------
+# Basecalling — POD5 → FASTQ via Oxford Nanopore Dorado
+# src/ingestion/basecaller.py
+#
+# This section is only relevant when the input is raw POD5 signal data
+# from a MinION/PromethION sequencer. If you already have FASTQ files
+# (from a previous basecalling run or from a public database), skip this.
+# -----------------------------------------------------------------------------
+
+basecalling:
+
+  # Path to the Dorado executable
+  # If Dorado is on your system PATH, just use "dorado"
+  # If installed in a specific location, use the full path:
+  #   e.g. "/home/user/dorado/bin/dorado" or "/opt/dorado/bin/dorado"
+  # Download: https://github.com/nanoporetech/dorado/releases
+  dorado_executable: "dorado"
+
+  # Basecalling model — must match your flow cell chemistry and kit
+  # Common options:
+  #   dna_r10.4.1_e8.2_400bps_fast@v4.3.0   (fast, less accurate)
+  #   dna_r10.4.1_e8.2_400bps_hac@v4.3.0    (high accuracy — recommended)
+  #   dna_r10.4.1_e8.2_400bps_sup@v4.3.0    (super accuracy — very slow)
+  # Download models with: dorado download --model <model_name>
+  # For development: use hac (high accuracy) as the default
+  dorado_model: "dna_r10.4.1_e8.2_400bps_hac@v4.3.0"
+
+  # Where to write basecalled FASTQ files
+  # These become the input to the ingestion pipeline
+  output_dir: "data/basecalled"
+
+  # Compute device for basecalling
+  # "cpu"       : use CPU only — slow but works everywhere (MacBook Air M1)
+  # "cuda:0"    : use first NVIDIA GPU — use on HPC
+  # "metal"     : use Apple Metal GPU — faster on M1/M2 Mac than cpu
+  # On MacBook Air M1: use "metal" for faster basecalling
+  # On HPC with NVIDIA: use "cuda:0"
+  device: "cpu"
+
+  # Batch size for Dorado inference
+  # Larger = faster but uses more memory
+  # Reduce if you see out-of-memory errors
+  # MacBook Air M1 (8GB): 32-64 is safe
+  # HPC GPU (40GB+): 512-1024 is reasonable
+  batch_size: 64
+
+  # POD5 input directory
+  # Scanned for .pod5 files when running basecall_directory()
+  pod5_dir: "data/raw/pod5"
+
+  # Whether to keep intermediate BAM files from Dorado
+  # Dorado can output BAM instead of FASTQ — we convert to FASTQ
+  # Set to false to save disk space (recommended)
+  keep_bam: false
 
 
 # -----------------------------------------------------------------------------
