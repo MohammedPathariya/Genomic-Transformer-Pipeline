@@ -172,6 +172,24 @@ enricher:
   # Minimum fraction of k-mers that must match for localization confidence
   min_kmer_fraction: 0.05
 
+  # Long read threshold in base pairs
+  # Reads longer than this are scored using windowed localization instead
+  # of whole-read scoring. The full pol gene (PR+RT+IN) spans ~2843bp.
+  # A read longer than 3000bp likely spans multiple sub-regions, causing
+  # RT to always win whole-read scoring due to its larger anchor set.
+  # Windowed scoring finds the best-scoring 400bp window instead.
+  long_read_threshold: 3000
+
+  # Window size for windowed localization (bases)
+  # Applied to reads longer than long_read_threshold
+  # 400bp covers roughly one pol sub-region section with multiple anchor hits
+  window_size: 400
+
+  # Step size between windows (bases)
+  # 200bp step = 50% window overlap — balances sensitivity vs speed
+  # Reduce to 100 for higher sensitivity, increase to 400 for faster runs
+  window_step: 200
+
   # Gene regions and their HXB2 nucleotide coordinate ranges
   # Used to extract seed k-mers from the reference
   gene_regions:

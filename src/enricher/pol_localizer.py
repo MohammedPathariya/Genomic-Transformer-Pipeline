@@ -21,12 +21,35 @@ Why this is novel:
 How it works:
     1. At module load time, extract every 15-mer from the PR, RT, and IN
        regions of the HXB2 reference genome.
-    2. Filter to keep only k-mers that are unique to one region (not
-       shared with another region) and not low-complexity.
-    3. For each incoming read, count how many of its k-mers match each
-       region's anchor set (checking both strands).
-    4. The region with the most hits wins — if it clears minimum thresholds.
-    5. Return the read annotated with gene_region and confidence score.
+    2. Filter to keep only k-mers that are unique to their region across
+       the entire HXB2 genome (not just within pol).
+    3. For reads shorter than long_read_threshold (3000bp):
+       Whole-read scoring — count k-mer hits across the full sequence.
+       Works correctly when the read covers only one pol sub-region.
+    4. For reads longer than long_read_threshold:
+       Windowed scoring — slide a 400bp window and find the window with
+       the strongest discriminating signal. Prevents RT from always
+       winning on reads that span the full pol gene.
+    5. The region with the most normalised hits wins — if it clears
+       minimum thresholds.
+    6. Return the read annotated with gene_region and confidence score.
+
+Known limitation — full-pol amplicon datasets:
+    When reads span the entire pol gene (PR + RT + IN, ~2843bp total),
+    all three regions score positively simultaneously. Single-region
+    assignment in this case is an approximation — the winning region
+    reflects which sub-region is most densely represented in the best
+    scoring window, not necessarily the only region present.
+
+    The architecturally correct solution for full-pol reads is
+    subsequence extraction: use anchor k-mer positions to identify
+    where each sub-region sits within the read and extract those
+    subsequences independently. This is deferred to the test suite
+    phase where ground-truth BAM alignment coordinates are available
+    for validation.
+
+    For targeted amplicon datasets (reads covering one sub-region only),
+    this module works correctly without modification.
 
 Position in pipeline:
     quality_filter → pol_localizer → codon_framer
@@ -72,6 +95,26 @@ DEFAULT_GENE_REGIONS = {
     "RT": {"start": 2550, "end": 4229},
     "IN": {"start": 4229, "end": 5096},
 }
+
+# Long read threshold in base pairs
+# Reads longer than this likely span multiple pol regions simultaneously
+# (PR + RT + IN = ~2843bp total). A read longer than this threshold
+# cannot be reliably assigned to a single region using whole-read scoring
+# because RT will always win — it has the most anchor k-mers.
+# Windowed scoring is used instead for these reads.
+DEFAULT_LONG_READ_THRESHOLD = 3000
+
+# Window size for windowed localization of long reads
+# Each window is scored independently against all three anchor sets
+# 400bp windows cover roughly one-third of a single pol sub-region
+# and are large enough to contain multiple anchor k-mer hits
+DEFAULT_WINDOW_SIZE = 400
+
+# Step size between windows (overlap = window_size - step_size)
+# 200bp step = 50% overlap between consecutive windows
+# More overlap = more sensitive but slower
+# Less overlap = faster but may miss region boundaries
+DEFAULT_WINDOW_STEP = 200
 
 # Reverse complement translation table
 # Built once at module load — used millions of times during processing
@@ -429,11 +472,14 @@ def build_anchor_sets(
     Steps:
     1. Extract all k-mers from each gene region
     2. Remove low-complexity k-mers
-    3. Remove k-mers that appear in more than one region (non-unique)
+    3. Remove k-mers that appear anywhere else in the full HXB2 genome
+       (not just the other two pol regions — anywhere in the 9719bp sequence)
     4. Add reverse complements of all surviving k-mers
 
-    The uniqueness filter is critical. A k-mer that appears in both RT
-    and IN would add noise to both counters without discriminating power.
+    The full-genome uniqueness filter is critical. A k-mer that appears in
+    the IN region but also in the gag or env genes will match reads from
+    those genes and contaminate the anchor set. We only keep k-mers that
+    are exclusive to their region within the entire reference genome.
 
     Parameters
     ----------
@@ -449,13 +495,8 @@ def build_anchor_sets(
     -------
     dict[str, set]
         Keys: "PR", "RT", "IN"
-        Values: sets of unique, high-complexity anchor k-mers for each region
+        Values: sets of genome-unique, high-complexity anchor k-mers
                 (both strands included)
-
-    Example
-    -------
-    anchor_sets = build_anchor_sets(hxb2_seq, gene_regions, k=15)
-    anchor_sets["RT"]  # → set of ~800-1200 unique RT anchor 15-mers
     """
 
     # Step 1: Extract raw k-mers for each region (forward strand only here)
@@ -472,27 +513,43 @@ def build_anchor_sets(
             f"  {region_name}: {len(kmers)} k-mers before uniqueness filter"
         )
 
-    # Step 2: Remove k-mers that appear in more than one region
-    # A k-mer shared between RT and IN is ambiguous — discard it from both
-    all_regions = list(raw_kmers.keys())
-    unique_kmers = {}
+    # Step 2: Build a set of ALL k-mers in the full HXB2 genome
+    # This is used to find k-mers that appear outside their target region
+    all_genome_kmers: dict[str, set] = {}  # position → kmers outside each region
 
-    for region_name in all_regions:
-        other_regions = [r for r in all_regions if r != region_name]
-        other_kmers = set()
-        for other in other_regions:
-            other_kmers.update(raw_kmers[other])
-
-        # Keep only k-mers that do not appear in any other region
-        unique = raw_kmers[region_name] - other_kmers
-        unique_kmers[region_name] = unique
+    for region_name, coords in gene_regions.items():
+        # Everything EXCEPT the target region
+        outside_sequence = (
+            hxb2_sequence[:coords["start"]] +
+            hxb2_sequence[coords["end"]:]
+        )
+        outside_kmers = set()
+        for i in range(len(outside_sequence) - k + 1):
+            kmer = outside_sequence[i:i + k]
+            if len(kmer) == k:
+                outside_kmers.add(kmer)
+        all_genome_kmers[region_name] = outside_kmers
 
         logger.debug(
-            f"  {region_name}: {len(unique)} k-mers after uniqueness filter "
-            f"(removed {len(raw_kmers[region_name]) - len(unique)} shared)"
+            f"  {region_name}: outside-region genome has "
+            f"{len(outside_kmers)} unique k-mers"
         )
 
-    # Step 3: Add reverse complements to each unique set
+    # Step 3: Keep only k-mers that do NOT appear anywhere outside
+    # their target region in the full genome
+    unique_kmers = {}
+    for region_name in raw_kmers:
+        outside_kmers = all_genome_kmers[region_name]
+        unique = raw_kmers[region_name] - outside_kmers
+        unique_kmers[region_name] = unique
+
+        removed = len(raw_kmers[region_name]) - len(unique)
+        logger.debug(
+            f"  {region_name}: {len(unique)} k-mers after genome uniqueness filter "
+            f"(removed {removed} non-unique)"
+        )
+
+    # Step 4: Add reverse complements to each unique set
     # This allows matching reads sequenced from either strand
     final_sets = {}
     for region_name, kmers in unique_kmers.items():
@@ -504,10 +561,116 @@ def build_anchor_sets(
 
         logger.info(
             f"  Anchor set [{region_name}]: {len(with_rc)} k-mers "
-            f"({len(kmers)} unique + reverse complements)"
+            f"({len(kmers)} genome-unique + reverse complements)"
         )
 
     return final_sets
+
+
+# ---------------------------------------------------------------------------
+# Windowed Localization — for reads longer than pol gene (~3000bp)
+# ---------------------------------------------------------------------------
+
+def _localize_windowed(
+    sequence:    str,
+    anchor_sets: dict,
+    k:           int,
+    window_size: int = DEFAULT_WINDOW_SIZE,
+    window_step: int = DEFAULT_WINDOW_STEP,
+) -> tuple[str, float, int, dict]:
+    """
+    Localize a long read by scoring sliding windows across its length.
+
+    The problem with whole-read scoring on long reads:
+        An 8000bp read spans the full pol gene (PR + RT + IN = 2843bp)
+        plus flanking sequence. RT has the most anchor k-mers so it
+        always wins the whole-read vote — even when the read contains
+        clear PR or IN sequence.
+
+    The windowed solution:
+        Slide a 400bp window across the read in 200bp steps. Score each
+        window independently against all three anchor sets. The winning
+        region is determined by the window with the single highest
+        normalized score — not the sum across the whole read.
+
+    Why the best window rather than the average:
+        A long read that spans RT + IN will have windows scoring well
+        for both. Taking the average would muddle the signal. Taking
+        the best single window identifies the most confidently localized
+        region — the part of the read with the strongest discriminating
+        k-mer signal.
+
+    Parameters
+    ----------
+    sequence : str
+        Full read sequence, uppercase.
+    anchor_sets : dict
+        Dictionary of region → set of anchor k-mers.
+    k : int
+        K-mer length.
+    window_size : int
+        Size of each scoring window in bases.
+    window_step : int
+        Number of bases to advance between windows.
+
+    Returns
+    -------
+    tuple[str, float, int, dict]
+        (gene_region, confidence, seed_hits, hit_breakdown)
+        Same return signature as the whole-read scoring path so
+        localize() can use both paths interchangeably.
+    """
+    read_len = len(sequence)
+
+    # Track best window result per region
+    # Structure: {region: {"score": float, "hits": int}}
+    best_per_region: dict[str, dict] = {
+        region: {"score": 0.0, "hits": 0}
+        for region in anchor_sets
+    }
+
+    # Slide window across the read
+    window_count = 0
+    for window_start in range(0, read_len - window_size + 1, window_step):
+        window_seq = sequence[window_start: window_start + window_size]
+        window_len = len(window_seq)
+
+        if window_len < k:
+            break
+
+        total_possible = window_len - k + 1
+
+        # Score this window against each region's anchor set
+        for region_name, anchor_set in anchor_sets.items():
+            hits  = _count_kmer_hits(window_seq, anchor_set, k)
+            score = hits / total_possible
+
+            # Keep only the best-scoring window per region
+            if score > best_per_region[region_name]["score"]:
+                best_per_region[region_name]["score"] = score
+                best_per_region[region_name]["hits"]  = hits
+
+        window_count += 1
+
+    logger.debug(
+        f"Windowed scoring: {window_count} windows across {read_len}bp read"
+    )
+
+    # hit_breakdown for the output — use best window hits per region
+    hit_breakdown = {
+        region: best_per_region[region]["hits"]
+        for region in anchor_sets
+    }
+
+    # Winning region = highest best-window score
+    winning_region = max(
+        best_per_region,
+        key=lambda r: best_per_region[r]["score"]
+    )
+    winning_score  = best_per_region[winning_region]["score"]
+    winning_hits   = best_per_region[winning_region]["hits"]
+
+    return winning_region, winning_score, winning_hits, hit_breakdown
 
 
 # ---------------------------------------------------------------------------
@@ -520,10 +683,13 @@ def _load_localizer_config(config_path: str = DEFAULT_CONFIG_PATH) -> dict:
     Falls back to safe defaults if the config file is missing.
     """
     defaults = {
-        "kmer_size":        15,
-        "min_seed_hits":    3,
-        "min_kmer_fraction": 0.05,
-        "gene_regions":     DEFAULT_GENE_REGIONS,
+        "kmer_size":              15,
+        "min_seed_hits":          3,
+        "min_kmer_fraction":      0.05,
+        "long_read_threshold":    DEFAULT_LONG_READ_THRESHOLD,
+        "window_size":            DEFAULT_WINDOW_SIZE,
+        "window_step":            DEFAULT_WINDOW_STEP,
+        "gene_regions":           DEFAULT_GENE_REGIONS,
         "reference": {
             "path": "data/public/HXB2_reference.fasta"
         },
@@ -552,11 +718,14 @@ def _load_localizer_config(config_path: str = DEFAULT_CONFIG_PATH) -> dict:
         )
 
         merged = {
-            "kmer_size":         enricher_config.get("kmer_size",         defaults["kmer_size"]),
-            "min_seed_hits":     enricher_config.get("min_seed_hits",     defaults["min_seed_hits"]),
-            "min_kmer_fraction": enricher_config.get("min_kmer_fraction", defaults["min_kmer_fraction"]),
-            "gene_regions":      enricher_config.get("gene_regions",      defaults["gene_regions"]),
-            "reference":         {"path": ref_path},
+            "kmer_size":           enricher_config.get("kmer_size",           defaults["kmer_size"]),
+            "min_seed_hits":       enricher_config.get("min_seed_hits",       defaults["min_seed_hits"]),
+            "min_kmer_fraction":   enricher_config.get("min_kmer_fraction",   defaults["min_kmer_fraction"]),
+            "long_read_threshold": enricher_config.get("long_read_threshold", defaults["long_read_threshold"]),
+            "window_size":         enricher_config.get("window_size",         defaults["window_size"]),
+            "window_step":         enricher_config.get("window_step",         defaults["window_step"]),
+            "gene_regions":        enricher_config.get("gene_regions",        defaults["gene_regions"]),
+            "reference":           {"path": ref_path},
         }
 
         logger.info(
@@ -564,6 +733,8 @@ def _load_localizer_config(config_path: str = DEFAULT_CONFIG_PATH) -> dict:
             f"k={merged['kmer_size']}, "
             f"min_hits={merged['min_seed_hits']}, "
             f"min_fraction={merged['min_kmer_fraction']}, "
+            f"long_read_threshold={merged['long_read_threshold']}bp, "
+            f"window={merged['window_size']}bp step={merged['window_step']}bp, "
             f"reference='{ref_path}'"
         )
 
@@ -615,6 +786,9 @@ class PolLocalizer:
         self.k                   = config["kmer_size"]
         self.min_seed_hits       = config["min_seed_hits"]
         self.min_kmer_fraction   = config["min_kmer_fraction"]
+        self.long_read_threshold = config["long_read_threshold"]
+        self.window_size         = config["window_size"]
+        self.window_step         = config["window_step"]
         self.reference_path      = config["reference"]["path"]
 
         # Normalize gene region coordinates
@@ -677,21 +851,54 @@ class PolLocalizer:
         read_len = len(sequence)
 
         # Number of possible k-mers in this read
-        # Used as denominator for confidence score
+        # Used as denominator for confidence score in whole-read path
         total_possible_kmers = max(1, read_len - self.k + 1)
 
-        # Count hits for each region
-        hit_breakdown = {}
-        for region_name, anchor_set in self.anchor_sets.items():
-            hits = _count_kmer_hits(sequence, anchor_set, self.k)
-            hit_breakdown[region_name] = hits
+        # ---------------------------------------------------------------
+        # Route to correct scoring path based on read length
+        #
+        # Short reads (< long_read_threshold):
+        #   Whole-read scoring. Count k-mer hits across the full sequence.
+        #   Works correctly when the read covers only one pol sub-region.
+        #
+        # Long reads (>= long_read_threshold):
+        #   Windowed scoring. Slide a window across the read and find the
+        #   window with the strongest discriminating signal. Prevents RT
+        #   from always winning on reads that span the full pol gene.
+        # ---------------------------------------------------------------
 
-        # Find the winning region
-        winning_region = max(hit_breakdown, key=hit_breakdown.get)
-        winning_hits   = hit_breakdown[winning_region]
+        if read_len >= self.long_read_threshold:
+            # Windowed path — for reads spanning multiple pol regions
+            logger.debug(
+                f"Using windowed scoring for '{read.read_id}' "
+                f"(len={read_len}bp >= threshold={self.long_read_threshold}bp)"
+            )
+            winning_region, confidence, winning_hits, hit_breakdown = _localize_windowed(
+                sequence    = sequence,
+                anchor_sets = self.anchor_sets,
+                k           = self.k,
+                window_size = self.window_size,
+                window_step = self.window_step,
+            )
 
-        # Compute confidence score
-        confidence = winning_hits / total_possible_kmers
+        else:
+            # Whole-read path — for reads shorter than the pol gene
+            logger.debug(
+                f"Using whole-read scoring for '{read.read_id}' "
+                f"(len={read_len}bp < threshold={self.long_read_threshold}bp)"
+            )
+            # Count hits for each region
+            hit_breakdown = {}
+            for region_name, anchor_set in self.anchor_sets.items():
+                hits = _count_kmer_hits(sequence, anchor_set, self.k)
+                hit_breakdown[region_name] = hits
+
+            # Find the winning region
+            winning_region = max(hit_breakdown, key=hit_breakdown.get)
+            winning_hits   = hit_breakdown[winning_region]
+
+            # Compute confidence score
+            confidence = winning_hits / total_possible_kmers
 
         # Apply minimum thresholds
         # Both conditions must be met to make a call
