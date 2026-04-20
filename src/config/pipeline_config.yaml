@@ -109,8 +109,19 @@ basecalling:
 
 
 # -----------------------------------------------------------------------------
-# Quality Filter
+# Quality Filter — Stage 1 (global, runs before region assignment)
 # src/ingestion/quality_filter.py
+#
+# This is a lightweight first pass that rejects reads that are garbage
+# regardless of which gene region they come from. It does NOT apply
+# region-specific length thresholds — that is handled by region_filter
+# (Stage 2) after pol_localizer assigns each read to PR/RT/IN.
+#
+# Why min_read_length is 150 (not 500):
+#   PR (Protease) is only 297bp. Targeted PR amplicons are 150-297bp.
+#   Setting min_read_length=500 would reject all PR reads before they
+#   ever reach the localizer. The region_filter (Stage 2) enforces the
+#   correct per-region minimums after localization.
 # -----------------------------------------------------------------------------
 
 quality_filter:
@@ -119,11 +130,11 @@ quality_filter:
   # modules when you want to pass everything through regardless of quality
   enabled: true
 
-  # Minimum read length in bases
-  # Reads shorter than this cannot contain enough pol gene to be useful
-  # HIV-1 pol gene is ~3000bp — 500bp is a conservative floor
-  # Raise to 1000bp when processing full HPC dataset
-  min_read_length: 500
+  # Minimum read length in bases — global floor across all gene regions
+  # Lowered to 150 to allow PR reads (150-297bp) through Stage 1.
+  # Region-specific minimums are enforced by region_filter after localization.
+  # Previously 500 — that value blocked all PR targeted reads.
+  min_read_length: 150
 
   # Maximum read length in bases
   # Reads longer than this are likely chimeric artifacts
@@ -152,9 +163,10 @@ quality_filter:
 
 
 # -----------------------------------------------------------------------------
-# Enricher — Alignment-Free pol Localization
+# Enricher — Alignment-Free pol Localization + Region-Aware Filtering
 # src/enricher/pol_localizer.py
-# (parameters to be filled in when we build the enricher)
+# src/enricher/region_filter.py  ← NEW in this update
+# src/enricher/codon_framer.py
 # -----------------------------------------------------------------------------
 
 enricher:
@@ -192,19 +204,49 @@ enricher:
 
   # Gene regions and their HXB2 nucleotide coordinate ranges
   # Used to extract seed k-mers from the reference
+  # Coordinates: 0-indexed, half-open (Python slice convention)
+  # Source: K03455.1 canonical positions — verified against run_entire_pipeline_hybrid.py
   gene_regions:
     PR:
-      start: 2253
-      end:   2550
+      start: 2252
+      end:   2549
       description: "Protease — 99 amino acids"
     RT:
-      start: 2550
+      start: 2549
       end:   4229
       description: "Reverse Transcriptase — 560 amino acids"
     IN:
       start: 4229
       end:   5096
       description: "Integrase — 288 amino acids"
+
+  # ---------------------------------------------------------------------------
+  # Region-Aware Length Filter — Stage 2 (runs after pol_localizer)
+  # src/enricher/region_filter.py
+  #
+  # Why this exists as a separate stage from quality_filter:
+  #   quality_filter runs BEFORE pol_localizer and cannot apply region-specific
+  #   logic because it does not yet know which gene region a read belongs to.
+  #   This filter runs AFTER localization and applies per-region minimums.
+  #
+  # Pipeline order:
+  #   stream_reader → quality_filter → pol_localizer → region_filter → codon_framer
+  #
+  # PR minimum is 150bp because the full PR gene is only 297bp.
+  # RT and IN minimums are 500bp — targeted amplicons for these regions
+  # are 800-1500bp and 400-867bp respectively; 500bp is a safe floor.
+  # ---------------------------------------------------------------------------
+  region_length_filter:
+    enabled: true
+    PR:
+      min_len: 150     # PR gene = 297bp — full coverage reads are 150-297bp
+      max_len: 50000
+    RT:
+      min_len: 500     # RT targeted amplicons: 800-1500bp
+      max_len: 50000
+    IN:
+      min_len: 500     # IN targeted amplicons: 400-867bp
+      max_len: 50000
 
 
 # -----------------------------------------------------------------------------
