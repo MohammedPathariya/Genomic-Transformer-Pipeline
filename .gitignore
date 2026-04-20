@@ -82,4 +82,4 @@ dataset_generation.log
 docs/*.pdf
 
 # --- Reference Repos ---
-reference_repos/
+reference_repos/.vscode/
