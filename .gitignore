@@ -1,5 +1,5 @@
 # --- Research Data & Bioinformatics ---
-data/
+# Raw sequencing files — never commit these (large, binary)
 *.fastq
 *.fastq.gz
 *.fq
@@ -9,12 +9,27 @@ data/
 *.bai
 *.fast5
 *.pod5
+
+# FASTA files are ignored globally EXCEPT the HXB2 reference
+# (handled by negation rule below)
 *.fasta
 *.fa
-*.json
-# Keep the JSON results from reference_repos if you want, but usually, 
-# clinical data should not be tracked.
-results/
+
+# Keep HXB2 reference and HIVDB XML in the repo
+!data/public/HXB2_reference.fasta
+!data/public/HIVDB_9.8.xml
+!data/public/HXB2_reference.mmi
+
+# Ignore derived/large data directories
+data/actg_fastq/
+data/processed/
+data/test/
+
+# Keep Stanford HIVdb resistant subsets and source metadata
+!data/raw/stanford_hivdb/PR_resistant.txt
+!data/raw/stanford_hivdb/RT_resistant.txt
+!data/raw/stanford_hivdb/IN_resistant.txt
+!data/raw/stanford_hivdb/SOURCE.md
 
 # --- Python & Environments ---
 __pycache__/
@@ -60,10 +75,11 @@ Thumbs.db
 
 # --- Logs ---
 *.log
+logs/
 dataset_generation.log
 
 # --- Reference Documents ---
 docs/*.pdf
 
-# --- Reference Repos (Ujwal Jibhkate - https://github.com/ujwal-jibhkate?tab=repositories) ---
+# --- Reference Repos ---
 reference_repos/
