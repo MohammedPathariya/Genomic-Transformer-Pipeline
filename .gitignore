@@ -83,4 +83,4 @@ docs/*.pdf
 
 # --- Reference Repos ---
 reference_repos/.vscode/
-.vscode/
+.vscode/results/

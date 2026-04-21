@@ -1,0 +1,330 @@
+
+===================================================================
+  HIV DRM Pipeline — Stanford HIVdb Validation
+  Data dir  : data/raw/stanford_hivdb
+  Genes     : PR, RT, IN
+===================================================================
+
+───────────────────────────────────────────────────────────────────
+  Processing PR...
+───────────────────────────────────────────────────────────────────
+  Initializing pipeline components...
+  Reading PR_resistant.txt...
+
+===================================================================
+  VALIDATION REPORT — PR
+===================================================================
+
+  ── Subtype B (treatment-experienced) ──
+    Sequences (with NASeq) : 2720
+    Passed pipeline        : 2720
+    Rejected               : 0
+    Wrong gene assigned    : 0
+    DRM position coverage  : 99.9%
+
+    Per-read breakdown (n=2720):
+      Both wildtype        :    42  (1.5%)
+      Exact match          :  2162  (79.5%)
+      Partial match        :   502  (18.5%)
+      False positive reads :    14  (0.5%)
+
+    Mutation-level results:
+      TP=16180  FN=50  FP=2798
+      Recall    : 99.7%
+      Precision : 85.3%
+      F1        : 0.919
+
+    Top mutations (TP ranked):
+      Mut         TP    FN    FP   Recall     Prec
+      -------- ----- ----- ----- -------- --------
+      L63?      2401     2    26   99.9%    98.9%
+      L10?      1299    11    74   99.2%    94.6%
+      A71?      1210     0    69  100.0%    94.6%
+      I93?      1060     1    28   99.9%    97.4%
+      L90?      1018     4    53   99.6%    95.1%
+      V77?       925     1    65   99.9%    93.4%
+      M46?       874     0    60  100.0%    93.6%
+      V82?       857     5    69   99.4%    92.5%
+      E35?       844     0    63  100.0%    93.1%
+      M36?       807     4    53   99.5%    93.8%
+      I54?       686     2    66   99.7%    91.2%
+      K20?       545     0   104  100.0%    84.0%
+      I13?       506     0    76  100.0%    86.9%
+      G73?       416     0    89  100.0%    82.4%
+      I84?       347     3    66   99.1%    84.0%
+      D30?       280     0   104  100.0%    72.9%
+      N88?       252     3    93   98.8%    73.0%
+      D60?       242     0    90  100.0%    72.9%
+      T74?       205     0    87  100.0%    70.2%
+      G48?       171     6    63   96.6%    73.1%
+
+  ── Non-B subtypes (treatment-experienced) ──
+    Sequences (with NASeq) : 280
+    Passed pipeline        : 275
+    Rejected               : 5
+    Wrong gene assigned    : 0
+    DRM position coverage  : 99.7%
+
+    Per-read breakdown (n=275):
+      Both wildtype        :     0  (0.0%)
+      Exact match          :   195  (70.9%)
+      Partial match        :    80  (29.1%)
+      False positive reads :     0  (0.0%)
+
+    Mutation-level results:
+      TP=1747  FN=8  FP=641
+      Recall    : 99.5%
+      Precision : 73.2%
+      F1        : 0.843
+
+    Top mutations (TP ranked):
+      Mut         TP    FN    FP   Recall     Prec
+      -------- ----- ----- ----- -------- --------
+      M36?       267     0     0  100.0%   100.0%
+      E35?       202     0    10  100.0%    95.3%
+      L89?       198     5     6   97.5%    97.1%
+      K20?       152     0    14  100.0%    91.6%
+      L63?       145     0     9  100.0%    94.2%
+      I13?       132     0    18  100.0%    88.0%
+      L10?       114     0    23  100.0%    83.2%
+      I93?        84     0     2  100.0%    97.7%
+      V82?        64     0    20  100.0%    76.2%
+      I54?        46     1    19   97.9%    70.8%
+      T74?        46     1    18   97.9%    71.9%
+      L90?        46     1    12   97.9%    79.3%
+      M46?        37     0    21  100.0%    63.8%
+      A71?        34     0    20  100.0%    63.0%
+      D60?        30     0    18  100.0%    62.5%
+      N88?        23     0    24  100.0%    48.9%
+      K43?        17     0    21  100.0%    44.7%
+      L33?        15     0    26  100.0%    36.6%
+      I84?        12     0    19  100.0%    38.7%
+      Q58?        11     0    23  100.0%    32.4%
+
+    Non-B subtype distribution:
+      C                     62
+      F                     54
+      CRF01_AE              41
+      A                     33
+      D                     22
+      CRF12_BF              20
+      CRF02_AG              19
+      G                     11
+      O                      5
+      CRF45_cpx              4
+
+
+───────────────────────────────────────────────────────────────────
+  Processing RT...
+───────────────────────────────────────────────────────────────────
+  Initializing pipeline components...
+  Reading RT_resistant.txt...
+
+===================================================================
+  VALIDATION REPORT — RT
+===================================================================
+
+  ── Subtype B (treatment-experienced) ──
+    Sequences (with NASeq) : 2802
+    Passed pipeline        : 2802
+    Rejected               : 0
+    Wrong gene assigned    : 0
+    DRM position coverage  : 87.9%
+
+    Per-read breakdown (n=2802):
+      Both wildtype        :   131  (4.7%)
+      Exact match          :  1335  (47.6%)
+      Partial match        :  1179  (42.1%)
+      False positive reads :   157  (5.6%)
+
+    Mutation-level results:
+      TP=11859  FN=197  FP=16142
+      Recall    : 98.4%
+      Precision : 42.4%
+      F1        : 0.592
+
+    Top mutations (TP ranked):
+      Mut         TP    FN    FP   Recall     Prec
+      -------- ----- ----- ----- -------- --------
+      T215?      1423    29    68   98.0%    95.4%
+      M184?      1373     0   385  100.0%    78.1%
+      M41?      1243     1   366   99.9%    77.3%
+      D67?      1039    30   395   97.2%    72.5%
+      K70?       764     7   418   99.1%    64.6%
+      L210?       697    54   303   92.8%    69.7%
+      K219?       617     1   198   99.8%    75.7%
+      K103?       558     3   521   99.5%    51.7%
+      T69?       517    11   511   97.9%    50.3%
+      V118?       482     4   534   99.2%    47.4%
+      E44?       336     1   545   99.7%    38.1%
+      Y181?       335     0   533  100.0%    38.6%
+      A98?       295     2   573   99.3%    34.0%
+      L74?       256     0   591  100.0%    30.2%
+      V179?       229     0   631  100.0%    26.6%
+      V75?       196     3   578   98.5%    25.3%
+      G190?       188     2   613   98.9%    23.5%
+      S68?       177     0   595  100.0%    22.9%
+      K101?       174     4   471   97.8%    27.0%
+      A62?       100     0   655  100.0%    13.2%
+
+  ── Non-B subtypes (treatment-experienced) ──
+    Sequences (with NASeq) : 198
+    Passed pipeline        : 189
+    Rejected               : 9
+    Wrong gene assigned    : 0
+    DRM position coverage  : 86.1%
+
+    Per-read breakdown (n=189):
+      Both wildtype        :    31  (16.4%)
+      Exact match          :    73  (38.6%)
+      Partial match        :    76  (40.2%)
+      False positive reads :     9  (4.8%)
+
+    Mutation-level results:
+      TP=502  FN=20  FP=1129
+      Recall    : 96.2%
+      Precision : 30.8%
+      F1        : 0.466
+
+    Top mutations (TP ranked):
+      Mut         TP    FN    FP   Recall     Prec
+      -------- ----- ----- ----- -------- --------
+      M184?        65     0    17  100.0%    79.3%
+      D67?        49     0    27  100.0%    64.5%
+      T215?        49     0    11  100.0%    81.7%
+      K70?        44     0    30  100.0%    59.5%
+      M41?        37     0    31  100.0%    54.4%
+      K238?        36     0     0  100.0%   100.0%
+      T69?        30     5    21   85.7%    58.8%
+      V179?        28     0    38  100.0%    42.4%
+      K219?        25     0    15  100.0%    62.5%
+      L210?        20     0    29  100.0%    40.8%
+      S68?        18     0    45  100.0%    28.6%
+      V75?        12     2    27   85.7%    30.8%
+      V118?        12     0    46  100.0%    20.7%
+      A98?        10     0    46  100.0%    17.9%
+      K103?         9     0    41  100.0%    18.0%
+      Y181?         8     0    39  100.0%    17.0%
+      E44?         6     0    44  100.0%    12.0%
+      H221?         6     0    19  100.0%    24.0%
+      V108?         6     0    39  100.0%    13.3%
+      K65?         5     0    39  100.0%    11.4%
+
+    Non-B subtype distribution:
+      CRF01_AE              53
+      D                     36
+      A                     21
+      C                     20
+      CRF02_AG              18
+      O                      9
+      F                      8
+      CRF18_cpx              8
+      CRF45_cpx              5
+      G                      5
+
+
+───────────────────────────────────────────────────────────────────
+  Processing IN...
+───────────────────────────────────────────────────────────────────
+  Initializing pipeline components...
+  Reading IN_resistant.txt...
+
+===================================================================
+  VALIDATION REPORT — IN
+===================================================================
+
+  ── Subtype B (treatment-experienced) ──
+    Sequences (with NASeq) : 1746
+    Passed pipeline        : 1746
+    Rejected               : 0
+    Wrong gene assigned    : 0
+    DRM position coverage  : 98.5%
+
+    Per-read breakdown (n=1746):
+      Both wildtype        :   222  (12.7%)
+      Exact match          :   957  (54.8%)
+      Partial match        :   319  (18.3%)
+      False positive reads :   248  (14.2%)
+
+    Mutation-level results:
+      TP=2900  FN=21  FP=3760
+      Recall    : 99.3%
+      Precision : 43.5%
+      F1        : 0.605
+
+    Top mutations (TP ranked):
+      Mut         TP    FN    FP   Recall     Prec
+      -------- ----- ----- ----- -------- --------
+      N155?       471     0   300  100.0%    61.1%
+      Q148?       457     2   340   99.6%    57.3%
+      G140?       388     5   345   98.7%    52.9%
+      G163?       236     4   368   98.3%    39.1%
+      V151?       232     3   353   98.7%    39.7%
+      S230?       225     1   235   99.6%    48.9%
+      T97?       210     2   368   99.1%    36.3%
+      E138?       198     0   366  100.0%    35.1%
+      Y143?       193     4   336   98.0%    36.5%
+      L74?       181     0   400  100.0%    31.2%
+      E157?       109     0   349  100.0%    23.8%
+
+  ── Non-B subtypes (treatment-experienced) ──
+    Sequences (with NASeq) : 502
+    Passed pipeline        : 502
+    Rejected               : 0
+    Wrong gene assigned    : 0
+    DRM position coverage  : 98.3%
+
+    Per-read breakdown (n=502):
+      Both wildtype        :   117  (23.3%)
+      Exact match          :   157  (31.3%)
+      Partial match        :   121  (24.1%)
+      False positive reads :   107  (21.3%)
+
+    Mutation-level results:
+      TP=506  FN=5  FP=1750
+      Recall    : 99.0%
+      Precision : 22.4%
+      F1        : 0.366
+
+    Top mutations (TP ranked):
+      Mut         TP    FN    FP   Recall     Prec
+      -------- ----- ----- ----- -------- --------
+      L74?       100     0   163  100.0%    38.0%
+      N155?        88     0   146  100.0%    37.6%
+      T97?        72     0   167  100.0%    30.1%
+      G163?        72     1   166   98.6%    30.3%
+      Y143?        43     2   144   95.6%    23.0%
+      E157?        36     0   167  100.0%    17.7%
+      V151?        31     0   179  100.0%    14.8%
+      Q148?        28     0   171  100.0%    14.1%
+      E138?        18     1   166   94.7%     9.8%
+      G140?        11     1   159   91.7%     6.5%
+      S230?         7     0   122  100.0%     5.4%
+
+    Non-B subtype distribution:
+      CRF02_AG             178
+      C                     88
+      A                     80
+      D                     50
+      F                     34
+      G                     16
+      CRF06_cpx             12
+      CRF11_cpx              6
+      CRF45_cpx              6
+      CRF01_AE               5
+
+
+===================================================================
+  CROSS-GENE SUMMARY
+===================================================================
+
+  Gene Stratum                                 N    Cov  Recall    Prec     F1
+  ---- ----------------------------------- ----- ------ ------- ------- ------
+  PR   Subtype B (treatment-experienced)    2720 99.9%  99.7%   85.3%  0.919
+  PR   Non-B subtypes (treatment-experienced)   275 99.7%  99.5%   73.2%  0.843
+  RT   Subtype B (treatment-experienced)    2802 87.9%  98.4%   42.4%  0.592
+  RT   Non-B subtypes (treatment-experienced)   189 86.1%  96.2%   30.8%  0.466
+  IN   Subtype B (treatment-experienced)    1746 98.5%  99.3%   43.5%  0.605
+  IN   Non-B subtypes (treatment-experienced)   502 98.3%  99.0%   22.4%  0.366
+
+  JSON results written: results/stanford_validation.json
