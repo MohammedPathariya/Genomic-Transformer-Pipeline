@@ -36,6 +36,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
+import json
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -49,6 +50,7 @@ logging.basicConfig(
     level  = logging.WARNING,
     format = "%(asctime)s | %(name)s | %(levelname)s | %(message)s",
 )
+logging.getLogger("src.ingestion.stream_reader").setLevel(logging.ERROR)
 logger = logging.getLogger("validate_stanford")
 
 # ---------------------------------------------------------------------------
@@ -532,6 +534,39 @@ def main() -> None:
                 )
         print()
 
+    # -----------------------------------------------------------------------
+    # JSON output — structured results for statistical_analysis.py
+    # -----------------------------------------------------------------------
+    json_results = {}
+    for gene, s_b, s_non in all_results:
+        json_results[gene] = {}
+        for st_key, s in [("B", s_b), ("nonB", s_non)]:
+            json_results[gene][st_key] = {
+                "n":        s.n_passed,
+                "cov":      round(s.pos_covered / max(1, s.pos_possible), 4),
+                "tp":       sum(s.tp.values()),
+                "fn":       sum(s.fn.values()),
+                "fp":       sum(s.fp.values()),
+                "exact":    s.exact_match,
+                "partial":  s.partial_match,
+                "fp_reads": s.fp_reads,
+                "wt":       s.both_wt,
+                "subtypes": s.subtypes_seen,
+                "mutations": {
+                    str(pos): {
+                        "tp": s.tp.get(pos, 0),
+                        "fn": s.fn.get(pos, 0),
+                        "fp": s.fp.get(pos, 0),
+                    }
+                    for pos in sorted(set(s.tp) | set(s.fn) | set(s.fp))
+                },
+            }
+
+    json_path = Path("results/stanford_validation.json")
+    json_path.parent.mkdir(exist_ok=True)
+    with open(json_path, "w") as f:
+        json.dump(json_results, f, indent=2)
+    print(f"  JSON results written: {json_path}")
 
 if __name__ == "__main__":
     main()
