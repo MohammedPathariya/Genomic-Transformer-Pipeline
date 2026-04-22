@@ -26,8 +26,17 @@ Column structure (Stanford Genotype-Rx format):
 
 Usage:
     python scripts/validate_stanford_hivdb.py --gene PR --max_rows 100 --verbose
+    --data_dir data/raw/stanford_hivdb \
+    > results/stanford_validation_raw.txt
+    
     python scripts/validate_stanford_hivdb.py --gene RT
-    python scripts/validate_stanford_hivdb.py --gene all
+    --data_dir data/raw/stanford_hivdb \
+    > results/stanford_validation_raw.txt
+    
+    python scripts/validate_stanford_hivdb.py \
+    --gene all \
+    --data_dir data/raw/stanford_hivdb \
+    > results/stanford_validation_raw.txt
 """
 
 import argparse
@@ -56,7 +65,7 @@ logger = logging.getLogger("validate_stanford")
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-DATA_DIR = Path("data/raw/stanford_hivdb")
+# DATA_DIR = Path("data/raw/stanford_hivdb")
 
 # Stanford file has 7 metadata columns before P1:
 # RefID, PtID, IsolateName, Region, Year, Subtype, PIList/RTIList/INIList
@@ -475,6 +484,11 @@ def main() -> None:
         "--gene", choices=["PR", "RT", "IN", "all"], default="all",
     )
     parser.add_argument(
+        "--data_dir", type=str,
+        default="data/raw/stanford_hivdb",
+        help="Directory containing PR_resistant.txt, RT_resistant.txt, IN_resistant.txt",
+    )
+    parser.add_argument(
         "--max_rows", type=int, default=None,
         help="Max rows per gene (default: all)",
     )
@@ -483,6 +497,7 @@ def main() -> None:
         help="Print per-read comparison lines",
     )
     args = parser.parse_args()
+    DATA_DIR = Path(args.data_dir)
 
     genes = ["PR", "RT", "IN"] if args.gene == "all" else [args.gene]
 

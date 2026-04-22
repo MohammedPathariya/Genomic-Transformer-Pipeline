@@ -84,3 +84,9 @@ docs/*.pdf
 # --- Reference Repos ---
 reference_repos/.vscode/
 .vscode/results/
+
+# Explicitly tracked — expanded Stanford HIVdb dataset
+!data/raw/stanford_hivdb_5k/PR_resistant.txt
+!data/raw/stanford_hivdb_5k/RT_resistant.txt
+!data/raw/stanford_hivdb_5k/IN_resistant.txt
+!data/raw/stanford_hivdb_5k/SOURCE.md
