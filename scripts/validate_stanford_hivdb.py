@@ -250,6 +250,7 @@ def run_pipeline(
 # ---------------------------------------------------------------------------
 def validate_gene(
     gene:     str,
+    data_dir: Path,
     max_rows: Optional[int] = None,
     verbose:  bool = False,
 ) -> tuple[StratumResult, StratumResult]:
@@ -259,7 +260,7 @@ def validate_gene(
     s_b   = StratumResult(label="Subtype B (treatment-experienced)")
     s_non = StratumResult(label="Non-B subtypes (treatment-experienced)")
 
-    filepath = DATA_DIR / GENE_CONFIG[gene]["file"]
+    filepath = data_dir / GENE_CONFIG[gene]["file"]
     if not filepath.exists():
         print(f"  ERROR: {filepath} not found.")
         print(f"         Download with the curl commands first.")
@@ -518,6 +519,7 @@ def main() -> None:
 
         s_b, s_non = validate_gene(
             gene     = gene,
+            data_dir = DATA_DIR,
             max_rows = args.max_rows,
             verbose  = args.verbose,
         )
